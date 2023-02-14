@@ -98,14 +98,14 @@ pub trait TransactionProcessor: Send + Sync + Debug {
             start_version,
             end_version
         );
-        let psms = ProcessorStatusModel::from_versions(
-            self.name(),
-            start_version,
-            end_version,
-            false,
-            None,
-        );
-        self.apply_processor_status(&psms);
+        // let psms = ProcessorStatusModel::from_versions(
+        //     self.name(),
+        //     start_version,
+        //     end_version,
+        //     false,
+        //     None,
+        // );
+        //self.apply_processor_status(&psms);
     }
 
     /// Writes that a version has been completed successfully for this `TransactionProcessor` to the DB
@@ -120,14 +120,14 @@ pub trait TransactionProcessor: Send + Sync + Debug {
         LATEST_PROCESSED_VERSION
             .with_label_values(&[self.name()])
             .set(processing_result.end_version as i64);
-        let psms = ProcessorStatusModel::from_versions(
-            self.name(),
-            processing_result.start_version,
-            processing_result.end_version,
-            true,
-            None,
-        );
-        self.apply_processor_status(&psms);
+        // let psms = ProcessorStatusModel::from_versions(
+        //     self.name(),
+        //     processing_result.start_version,
+        //     processing_result.end_version,
+        //     true,
+        //     None,
+        // );
+        //self.apply_processor_status(&psms);
     }
 
     /// Writes that a version has errored for this `TransactionProcessor` to the DB
@@ -138,8 +138,8 @@ pub trait TransactionProcessor: Send + Sync + Debug {
             tpe
         );
         PROCESSOR_ERRORS.with_label_values(&[self.name()]).inc();
-        let psm = ProcessorStatusModel::from_transaction_processing_err(tpe);
-        self.apply_processor_status(&psm);
+        // let psm = ProcessorStatusModel::from_transaction_processing_err(tpe);
+        //self.apply_processor_status(&psm);
     }
 
     /// Actually performs the write for a `ProcessorStatusModel` changeset
