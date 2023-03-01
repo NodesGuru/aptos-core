@@ -1,4 +1,5 @@
 // Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -31,7 +32,7 @@ use aptos_types::{
     account_config,
     account_config::new_block_event_key,
     block_metadata::BlockMetadata,
-    on_chain_config::{new_epoch_event_key, FeatureFlag},
+    on_chain_config::{new_epoch_event_key, FeatureFlag, TimedFeatureOverride},
     transaction::{
         ChangeSet, ExecutionStatus, ModuleBundle, SignatureCheckedTransaction, SignedTransaction,
         Transaction, TransactionOutput, TransactionPayload, TransactionStatus, VMValidatorResult,
@@ -73,6 +74,7 @@ static EXECUTION_CONCURRENCY_LEVEL: OnceCell<usize> = OnceCell::new();
 static NUM_PROOF_READING_THREADS: OnceCell<usize> = OnceCell::new();
 static PARANOID_TYPE_CHECKS: OnceCell<bool> = OnceCell::new();
 static PROCESSED_TRANSACTIONS_DETAILED_COUNTERS: OnceCell<bool> = OnceCell::new();
+static TIMED_FEATURE_OVERRIDE: OnceCell<TimedFeatureOverride> = OnceCell::new();
 
 /// Remove this once the bundle is removed from the code.
 static MODULE_BUNDLE_DISALLOWED: AtomicBool = AtomicBool::new(true);
@@ -126,6 +128,15 @@ impl AptosVM {
             Some(enable) => *enable,
             None => true,
         }
+    }
+
+    // Set the override profile for timed features.
+    pub fn set_timed_feature_override(profile: TimedFeatureOverride) {
+        TIMED_FEATURE_OVERRIDE.set(profile).ok();
+    }
+
+    pub fn get_timed_feature_override() -> Option<TimedFeatureOverride> {
+        TIMED_FEATURE_OVERRIDE.get().cloned()
     }
 
     /// Sets the # of async proof reading threads.
@@ -253,14 +264,27 @@ impl AptosVM {
         }
     }
 
-    fn success_transaction_cleanup<S: MoveResolverExt + StateView>(
+    fn success_transaction_cleanup<S: MoveResolverExt, SS: MoveResolverExt>(
         &self,
         storage: &S,
-        user_txn_change_set_ext: ChangeSetExt,
+        user_txn_session: SessionExt<SS>,
         gas_meter: &mut AptosGasMeter,
         txn_data: &TransactionMetadata,
         log_context: &AdapterLogSchema,
     ) -> Result<(VMStatus, TransactionOutputExt), VMStatus> {
+        let user_txn_change_set_ext = user_txn_session
+            .finish(&mut (), gas_meter.change_set_configs())
+            .map_err(|e| e.into_vm_status())?;
+        // Charge gas for write set
+        gas_meter.charge_write_set_gas_for_io(user_txn_change_set_ext.write_set().iter())?;
+        gas_meter.charge_storage_fee(
+            user_txn_change_set_ext.write_set().iter(),
+            user_txn_change_set_ext.change_set().events(),
+            txn_data.transaction_size,
+            txn_data.gas_unit_price,
+        )?;
+        // TODO(Gas): Charge for aggregator writes
+
         let storage_with_changes =
             DeltaStateView::new(storage, user_txn_change_set_ext.write_set());
         // TODO: at this point we know that delta application failed
@@ -289,9 +313,8 @@ impl AptosVM {
             .run_success_epilogue(&mut session, gas_meter.balance(), txn_data, log_context)?;
 
         let epilogue_change_set_ext = session
-            .finish()
-            .map_err(|e| e.into_vm_status())?
-            .into_change_set(&mut (), gas_meter.change_set_configs())?;
+            .finish(&mut (), gas_meter.change_set_configs())
+            .map_err(|e| e.into_vm_status())?;
         let change_set_ext = user_txn_change_set_ext
             .squash(epilogue_change_set_ext)
             .map_err(|_err| VMStatus::Error(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR))?;
@@ -317,7 +340,7 @@ impl AptosVM {
         ))
     }
 
-    fn execute_script_or_entry_function<S: MoveResolverExt + StateView, SS: MoveResolverExt>(
+    fn execute_script_or_entry_function<S: MoveResolverExt, SS: MoveResolverExt>(
         &self,
         storage: &S,
         mut session: SessionExt<SS>,
@@ -396,21 +419,7 @@ impl AptosVM {
                 new_published_modules_loaded,
             )?;
 
-            let session_output = session.finish().map_err(|e| e.into_vm_status())?;
-            let change_set_ext =
-                session_output.into_change_set(&mut (), gas_meter.change_set_configs())?;
-
-            // Charge gas for write set
-            gas_meter.charge_write_set_gas(change_set_ext.write_set().iter())?;
-            // TODO(Gas): Charge for aggregator writes
-
-            self.success_transaction_cleanup(
-                storage,
-                change_set_ext,
-                gas_meter,
-                txn_data,
-                log_context,
-            )
+            self.success_transaction_cleanup(storage, session, gas_meter, txn_data, log_context)
         }
     }
 
@@ -515,7 +524,7 @@ impl AptosVM {
     /// Execute a module bundle load request.
     /// TODO: this is going to be deprecated and removed in favor of code publishing via
     /// NativeCodeContext
-    fn execute_modules<S: MoveResolverExt + StateView, SS: MoveResolverExt>(
+    fn execute_modules<S: MoveResolverExt, SS: MoveResolverExt>(
         &self,
         storage: &S,
         mut session: SessionExt<SS>,
@@ -565,15 +574,7 @@ impl AptosVM {
             new_published_modules_loaded,
         )?;
 
-        let session_output = session.finish().map_err(|e| e.into_vm_status())?;
-        let change_set_ext =
-            session_output.into_change_set(&mut (), gas_meter.change_set_configs())?;
-
-        // Charge gas for write set
-        gas_meter.charge_write_set_gas(change_set_ext.write_set().iter())?;
-        // TODO(Gas): Charge for aggregator writes
-
-        self.success_transaction_cleanup(storage, change_set_ext, gas_meter, txn_data, log_context)
+        self.success_transaction_cleanup(storage, session, gas_meter, txn_data, log_context)
     }
 
     /// Resolve a pending code publish request registered via the NativeCodeContext.
@@ -691,7 +692,7 @@ impl AptosVM {
             .finish(Location::Undefined)
     }
 
-    pub(crate) fn execute_user_transaction<S: MoveResolverExt + StateView>(
+    pub(crate) fn execute_user_transaction<S: MoveResolverExt>(
         &self,
         storage: &S,
         txn: &SignatureCheckedTransaction,
@@ -836,24 +837,15 @@ impl AptosVM {
                     )
                     .map_err(Err)?;
 
-                let execution_result = tmp_session
+                tmp_session
                     .execute_script(
                         script.code(),
                         script.ty_args().to_vec(),
                         args,
                         &mut gas_meter,
                     )
-                    .and_then(|_| tmp_session.finish())
-                    .map_err(|e| e.into_vm_status());
-
-                match execution_result {
-                    Ok(session_out) => session_out
-                        .into_change_set(&mut (), &change_set_configs)
-                        .map_err(Err)?,
-                    Err(e) => {
-                        return Err(Ok((e, discard_error_output(StatusCode::INVALID_WRITE_SET))));
-                    },
-                }
+                    .and_then(|_| tmp_session.finish(&mut (), &change_set_configs))
+                    .map_err(|e| Err(e.into_vm_status()))?
             },
         })
     }
@@ -867,7 +859,7 @@ impl AptosVM {
         // access path that the write set is going to update.
         for (state_key, _) in write_set.iter() {
             state_view
-                .get_state_value(state_key)
+                .get_state_value_bytes(state_key)
                 .map_err(|_| VMStatus::Error(StatusCode::STORAGE_ERROR))?;
         }
         Ok(())
@@ -896,7 +888,7 @@ impl AptosVM {
         }
     }
 
-    pub(crate) fn process_waypoint_change_set<S: MoveResolverExt + StateView>(
+    pub(crate) fn process_waypoint_change_set<S: MoveResolverExt>(
         &self,
         storage: &S,
         writeset_payload: WriteSetPayload,
@@ -1202,7 +1194,7 @@ impl VMAdapter for AptosVM {
             .any(|event| *event.key() == new_epoch_event_key)
     }
 
-    fn execute_single_transaction<S: MoveResolverExt + StateView>(
+    fn execute_single_transaction<S: MoveResolverExt>(
         &self,
         txn: &PreprocessedTransaction,
         data_cache: &S,
@@ -1308,7 +1300,7 @@ impl AptosSimulationVM {
     /*
     Executes a SignedTransaction without performing signature verification
      */
-    fn simulate_signed_transaction<S: MoveResolverExt + StateView>(
+    fn simulate_signed_transaction<S: MoveResolverExt>(
         &self,
         storage: &S,
         txn: &SignedTransaction,

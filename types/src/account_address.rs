@@ -1,4 +1,5 @@
 // Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::transaction::authenticator::{AuthenticationKey, Scheme};
 use anyhow::bail;
@@ -142,6 +143,10 @@ pub fn from_identity_public_key(identity_public_key: x25519::PublicKey) -> Accou
     // keep only the last 16 bytes
     array.copy_from_slice(&pubkey_slice[x25519::PUBLIC_KEY_SIZE - AccountAddress::LENGTH..]);
     AccountAddress::new(array)
+}
+
+pub fn create_collection_address(creator: AccountAddress, collection: &str) -> AccountAddress {
+    create_object_address(creator, collection.as_bytes())
 }
 
 pub fn create_token_address(

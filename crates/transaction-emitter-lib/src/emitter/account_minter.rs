@@ -85,6 +85,12 @@ impl<'t> AccountMinter<'t> {
             .unwrap()
             .checked_add(req.max_gas_per_txn * req.gas_price * req.init_gas_price_multiplier)
             .unwrap();
+        println!("{:?}", req);
+        println!(">>> coins_per_seed_account {}", coins_per_seed_account);
+        println!(
+            ">>> expected_num_seed_accounts {}",
+            expected_num_seed_accounts
+        );
         let coins_for_source = coins_per_seed_account
             .checked_mul(expected_num_seed_accounts as u64)
             .unwrap()
@@ -124,11 +130,10 @@ impl<'t> AccountMinter<'t> {
                     panic!("Aborting");
                 }
             } else {
-                let max_allowed = 2 * req
-                    .expected_max_txns
-                    .checked_mul(req.expected_gas_per_txn * req.gas_price)
+                let max_allowed = (2 * req.expected_max_txns as u128)
+                    .checked_mul((req.expected_gas_per_txn * req.gas_price).into())
                     .unwrap();
-                assert!(coins_for_source <= max_allowed,
+                assert!(coins_for_source as u128 <= max_allowed,
                     "Estimated total coins needed for load test ({}) are larger than expected_max_txns * expected_gas_per_txn, multiplied by 2 to account for rounding up ({})",
                     coins_for_source,
                     max_allowed,

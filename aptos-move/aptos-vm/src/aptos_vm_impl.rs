@@ -1,4 +1,5 @@
 // Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -22,8 +23,8 @@ use aptos_types::{
     account_config::{TransactionValidation, APTOS_TRANSACTION_VALIDATION, CORE_CODE_ADDRESS},
     chain_id::ChainId,
     on_chain_config::{
-        ApprovedExecutionHashes, FeatureFlag, Features, GasSchedule, GasScheduleV2, OnChainConfig,
-        StorageGasSchedule, Version,
+        ApprovedExecutionHashes, ConfigurationResource, FeatureFlag, Features, GasSchedule,
+        GasScheduleV2, OnChainConfig, StorageGasSchedule, TimedFeatures, Version,
     },
     transaction::{AbortInfo, ExecutionStatus, TransactionOutput, TransactionStatus},
     vm_status::{StatusCode, VMStatus},
@@ -117,12 +118,22 @@ impl AptosVMImpl {
         // If no chain ID is in storage, we assume we are in a testing environment and use ChainId::TESTING
         let chain_id = ChainId::fetch_config(&storage).unwrap_or_else(ChainId::test);
 
+        let timestamp = ConfigurationResource::fetch_config(&storage)
+            .map(|config| config.last_reconfiguration_time())
+            .unwrap_or(0);
+
+        let mut timed_features = TimedFeatures::new(chain_id, timestamp);
+        if let Some(profile) = crate::AptosVM::get_timed_feature_override() {
+            timed_features = timed_features.with_override_profile(profile)
+        }
+
         let inner = MoveVmExt::new(
             native_gas_params,
             abs_val_size_gas_params,
             gas_feature_version,
             chain_id.id(),
             features.clone(),
+            timed_features,
         )
         .expect("should be able to create Move VM; check if there are duplicated natives");
 
@@ -588,8 +599,9 @@ pub(crate) fn get_transaction_output<A: AccessPathCache, S: MoveResolverExt>(
         .checked_sub(gas_left)
         .expect("Balance should always be less than or equal to max gas amount");
 
-    let session_out = session.finish().map_err(|e| e.into_vm_status())?;
-    let change_set_ext = session_out.into_change_set(ap_cache, change_set_configs)?;
+    let change_set_ext = session
+        .finish(ap_cache, change_set_configs)
+        .map_err(|e| e.into_vm_status())?;
     let (delta_change_set, change_set) = change_set_ext.into_inner();
     let (write_set, events) = change_set.into_inner();
 

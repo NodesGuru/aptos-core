@@ -10,7 +10,6 @@ use crate::{
         tests::utils::{create_vec_serialized_transactions, create_vec_signed_transactions},
         types::{BatchId, SerializedTransaction},
     },
-    test_utils::build_empty_tree,
 };
 use aptos_config::config::QuorumStoreConfig;
 use aptos_consensus_types::common::TransactionSummary;
@@ -37,7 +36,7 @@ impl BatchIdDB for MockBatchIdDB {
         &self,
         _current_epoch: u64,
     ) -> anyhow::Result<Option<BatchId>, DbError> {
-        Ok(Some(0))
+        Ok(Some(BatchId::new_for_test(0)))
     }
 
     fn save_batch_id(&self, _epoch: u64, _batch_id: BatchId) -> anyhow::Result<(), DbError> {
@@ -81,25 +80,17 @@ async fn test_batch_creation() {
         .for_each(|txn| assert_eq!(txn_size, txn.len()));
 
     let config = QuorumStoreConfig {
-        max_batch_bytes: 9 * txn_size,
+        max_batch_bytes: 9 * txn_size + 1,
         ..Default::default()
     };
 
-    let block_store = build_empty_tree();
-
     let mut batch_generator = BatchGenerator::new(
         0,
+        config,
         Arc::new(MockBatchIdDB::new()),
         quorum_store_to_mempool_tx,
         batch_coordinator_cmd_tx,
         1000,
-        config.mempool_txn_pull_max_count,
-        config.mempool_txn_pull_max_bytes,
-        config.max_batch_counts,
-        config.max_batch_bytes,
-        config.batch_expiry_round_gap_when_init,
-        config.end_batch_ms,
-        block_store,
     );
 
     let serialize = |signed_txns: &Vec<SignedTransaction>| -> Vec<SerializedTransaction> {
@@ -121,7 +112,7 @@ async fn test_batch_creation() {
         // Expect AppendToBatch for 1 txn
         let quorum_store_command = batch_coordinator_cmd_rx.recv().await.unwrap();
         if let BatchCoordinatorCommand::AppendToBatch(data, batch_id) = quorum_store_command {
-            assert_eq!(batch_id, 1);
+            assert_eq!(batch_id, BatchId::new_for_test(1));
             assert_eq!(data.len(), signed_txns.len());
             assert_eq!(data, serialize(&signed_txns));
         } else {
@@ -154,7 +145,7 @@ async fn test_batch_creation() {
         // Expect AppendBatch for 9 txns
         let quorum_store_command = batch_coordinator_cmd_rx.recv().await.unwrap();
         if let BatchCoordinatorCommand::AppendToBatch(data, batch_id) = quorum_store_command {
-            assert_eq!(batch_id, 2);
+            assert_eq!(batch_id, BatchId::new_for_test(2));
             assert_eq!(data.len(), signed_txns.len());
             assert_eq!(data, serialize(&signed_txns));
         } else {
@@ -162,11 +153,11 @@ async fn test_batch_creation() {
         }
     });
 
-    let result = batch_generator.handle_scheduled_pull(false).await;
+    let result = batch_generator.handle_scheduled_pull(300).await;
     assert!(result.is_none());
-    let result = batch_generator.handle_scheduled_pull(false).await;
+    let result = batch_generator.handle_scheduled_pull(300).await;
     assert!(result.is_some());
-    let result = batch_generator.handle_scheduled_pull(false).await;
+    let result = batch_generator.handle_scheduled_pull(300).await;
     assert!(result.is_none());
 
     timeout(Duration::from_millis(10_000), join_handle)

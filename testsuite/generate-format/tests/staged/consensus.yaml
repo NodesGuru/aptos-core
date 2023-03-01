@@ -47,6 +47,10 @@ Batch:
     - payload:
         SEQ:
           TYPENAME: SignedTransaction
+BatchId:
+  STRUCT:
+    - id: U64
+    - nonce: U64
 BatchInfo:
   STRUCT:
     - epoch: U64
@@ -288,7 +292,8 @@ Fragment:
 FragmentInfo:
   STRUCT:
     - epoch: U64
-    - batch_id: U64
+    - batch_id:
+        TYPENAME: BatchId
     - fragment_id: U64
     - payload:
         SEQ:
@@ -409,7 +414,7 @@ Signature:
 SignedDigest:
   STRUCT:
     - epoch: U64
-    - peer_id:
+    - signer:
         TYPENAME: AccountAddress
     - info:
         TYPENAME: SignedDigestInfo
@@ -417,6 +422,8 @@ SignedDigest:
         TYPENAME: Signature
 SignedDigestInfo:
   STRUCT:
+    - batch_author:
+        TYPENAME: AccountAddress
     - digest:
         TYPENAME: HashValue
     - expiration:

@@ -1,4 +1,5 @@
 // Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #![forbid(unsafe_code)]
@@ -51,6 +52,7 @@ mod payload_manager;
 pub use consensusdb::create_checkpoint;
 /// Required by the smoke tests
 pub use consensusdb::CONSENSUS_DB_NAME;
+pub use quorum_store::quorum_store_db::QUORUM_STORE_DB_NAME;
 #[cfg(feature = "fuzzing")]
 pub use round_manager::round_manager_fuzzing;
 

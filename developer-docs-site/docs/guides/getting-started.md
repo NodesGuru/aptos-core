@@ -12,8 +12,6 @@ To kickstart your journey in the Aptos ecosystem, set up your environment as nee
 
 See the [Workflows](#workflows) for use cases associated with each path. See the [Aptos developer resources](#aptos-developer-resources) for quick links to Aptos networks, SDKs, and other tools.
 
-Then review the Aptos source code and [documentation](https://github.com/aptos-labs/aptos-core/tree/main/documentation) and [papers](https://github.com/aptos-labs/aptos-core/tree/main/developer-docs-site/static/papers) found in the [Aptos-core](https://github.com/aptos-labs/aptos-core) repository of GitHub while continuing your journey through this site. The source contains READMEs and code comments invaluable to developing on Aptos.
-
 ## Use supported operating systems
 
 Aptos can be built on various operating systems, including Linux, macOS. and Windows. Aptos is tested extensively on Linux and macOS, and less so on Windows. Here are the versions we use:
@@ -28,8 +26,8 @@ See [Installing Aptos CLI](../cli-tools/aptos-cli-tool/install-aptos-cli.md) for
 
 Aptos requires no specific hardware to develop on the blockchain. To run one of our nodes, see the hardware requirements for:
 
-* [Fullnodes](nodes/full-node/fullnode-source-code-or-docker.md#hardware-requirements)
-* [Validators](nodes/validator-node/operator/node-requirements.md#hardware-requirements)
+* [Fullnodes](../nodes/full-node/fullnode-source-code-or-docker.md#hardware-requirements)
+* [Validators](../nodes/validator-node/operator/node-requirements.md#hardware-requirements)
 
 ## Workflows
 
@@ -175,7 +173,7 @@ Optionally, check out a release branch to install an Aptos node. We suggest you 
 </TabItem>
 </Tabs>
 
-Now your basic Aptos development environment is ready. Head over to our [Developer Tutorials](tutorials/index.md) to get started in Aptos.
+Now your basic Aptos development environment is ready. Head over to our [Developer Tutorials](../tutorials/index.md) to get started in Aptos.
 
 ## Create and fund test accounts
 
@@ -231,6 +229,5 @@ This section contains links to frequently referred Aptos developer resources.
 
 ### IDE plugins for Move language
 
-- [Syntax highlighting for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax)
-- [Move analyzer for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer): Supports advanced code navigation and syntax highlighting.
-- [Move language plugin for Jetbrains IDEs](https://plugins.jetbrains.com/plugin/14721-move-language): Supports syntax highlighting, code navigation, renames, formatting, type checks and code generation.
+Install the [IDE plugins for the Move language](../guides/move-guides/index.md#ides-for-move) for even more handy features.
+
