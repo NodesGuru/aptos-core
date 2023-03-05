@@ -187,7 +187,10 @@ pub fn update_counters_for_processed_chunk(
             TransactionStatus::Discard(discard_status_code) => {
                 sample!(
                     SampleRate::Duration(Duration::from_secs(15)),
-                    warn!("Txn being discarded is {:?}", txn)
+                    warn!(
+                        "Txn being discarded is {:?} with status code {:?}",
+                        txn, discard_status_code
+                    )
                 );
                 (
                     "discard",
@@ -232,11 +235,6 @@ pub fn update_counters_for_processed_chunk(
                         .with_label_values(&[process_type, "script", state])
                         .inc();
                 },
-                aptos_types::transaction::TransactionPayload::ModuleBundle(_module) => {
-                    metrics::APTOS_PROCESSED_USER_TRANSACTIONS_PAYLOAD_TYPE
-                        .with_label_values(&[process_type, "module", state])
-                        .inc();
-                },
                 aptos_types::transaction::TransactionPayload::EntryFunction(function) => {
                     metrics::APTOS_PROCESSED_USER_TRANSACTIONS_PAYLOAD_TYPE
                         .with_label_values(&[process_type, "function", state])
@@ -268,6 +266,18 @@ pub fn update_counters_for_processed_chunk(
                             ])
                             .inc();
                     }
+                },
+                aptos_types::transaction::TransactionPayload::Multisig(_) => {
+                    metrics::APTOS_PROCESSED_USER_TRANSACTIONS_PAYLOAD_TYPE
+                        .with_label_values(&[process_type, "multisig", state])
+                        .inc();
+                },
+
+                // Deprecated. Will be removed in the future.
+                aptos_types::transaction::TransactionPayload::ModuleBundle(_module) => {
+                    metrics::APTOS_PROCESSED_USER_TRANSACTIONS_PAYLOAD_TYPE
+                        .with_label_values(&[process_type, "module", state])
+                        .inc();
                 },
             }
         }
