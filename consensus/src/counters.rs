@@ -3,13 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_metrics_core::{
-    exponential_buckets, op_counters::DurationHistogram, register_counter, register_gauge,
-    register_gauge_vec, register_histogram, register_histogram_vec, register_int_counter,
-    register_int_counter_vec, register_int_gauge, register_int_gauge_vec, AverageIntCounter,
+    exponential_buckets, op_counters::DurationHistogram, register_avg_counter, register_counter,
+    register_gauge, register_gauge_vec, register_histogram, register_histogram_vec,
+    register_int_counter, register_int_counter_vec, register_int_gauge, register_int_gauge_vec,
     Counter, Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
     IntGaugeVec,
 };
 use once_cell::sync::Lazy;
+
+/// Transaction commit was successful
+pub const TXN_COMMIT_SUCCESS_LABEL: &str = "success";
+/// Transaction commit failed (will not be retried)
+pub const TXN_COMMIT_FAILED_LABEL: &str = "failed";
+/// Transaction commit was unsuccessful, but will be retried
+pub const TXN_COMMIT_RETRY_LABEL: &str = "retry";
 
 //////////////////////
 // HEALTH COUNTERS
@@ -187,16 +194,16 @@ pub static LEADER_REPUTATION_ROUND_HISTORY_SIZE: Lazy<IntGauge> = Lazy::new(|| {
 });
 
 /// Counts when chain_health backoff is triggered
-pub static CHAIN_HEALTH_BACKOFF_TRIGGERED: Lazy<AverageIntCounter> = Lazy::new(|| {
-    AverageIntCounter::register(
+pub static CHAIN_HEALTH_BACKOFF_TRIGGERED: Lazy<Histogram> = Lazy::new(|| {
+    register_avg_counter(
         "aptos_chain_health_backoff_triggered",
         "Counts when chain_health backoff is triggered",
     )
 });
 
 /// Counts when waiting for full blocks is triggered
-pub static WAIT_FOR_FULL_BLOCKS_TRIGGERED: Lazy<AverageIntCounter> = Lazy::new(|| {
-    AverageIntCounter::register(
+pub static WAIT_FOR_FULL_BLOCKS_TRIGGERED: Lazy<Histogram> = Lazy::new(|| {
+    register_avg_counter(
         "aptos_wait_for_full_blocks_triggered",
         "Counts when waiting for full blocks is triggered",
     )
@@ -522,7 +529,11 @@ pub static BLOCK_TRACING: Lazy<HistogramVec> = Lazy::new(|| {
 /// Histogram of the time it requires to wait before inserting blocks into block store.
 /// Measured as the block's timestamp minus local timestamp.
 pub static WAIT_DURATION_S: Lazy<DurationHistogram> = Lazy::new(|| {
-    DurationHistogram::new(register_histogram!("aptos_consensus_wait_duration_s", "Histogram of the time it requires to wait before inserting blocks into block store. Measured as the block's timestamp minus the local timestamp.").unwrap())
+    DurationHistogram::new(
+        register_histogram!("aptos_consensus_wait_duration_s",
+            "Histogram of the time it requires to wait before inserting blocks into block store. Measured as the block's timestamp minus the local timestamp."
+        ).unwrap()
+    )
 });
 
 ///////////////////
@@ -589,6 +600,16 @@ pub static CONSENSUS_CHANNEL_MSGS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "aptos_consensus_channel_msgs_count",
         "Counters(queued,dequeued,dropped) related to consensus channel",
+        &["state"]
+    )
+    .unwrap()
+});
+
+/// Counters(queued,dequeued,dropped) related to buffer manager channel
+pub static BUFFER_MANAGER_CHANNEL_MSGS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "aptos_buffer_manager_channel_msgs_count",
+        "Counters(queued,dequeued,dropped) related to buffer manager channel",
         &["state"]
     )
     .unwrap()
@@ -670,4 +691,25 @@ pub static PROPOSER_ELECTION_DURATION: Lazy<Histogram> = Lazy::new(|| {
         "Time it takes for proposer election to compute proposer (when not cached)"
     )
     .unwrap()
+});
+
+/// Count of the number of blocks that have ready batches to execute.
+pub static QUORUM_BATCH_READY_COUNT: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "aptos_consensus_quorum_store_batch_ready_count",
+        "Count of the number of blocks that have ready batches to execute"
+    )
+    .unwrap()
+});
+
+/// Histogram of the time durations waiting for batch when executing.
+pub static BATCH_WAIT_DURATION: Lazy<DurationHistogram> = Lazy::new(|| {
+    DurationHistogram::new(
+        register_histogram!(
+            "aptos_consensus_batch_wait_duration",
+            "Histogram of the time durations for waiting batches.",
+            // exponential_buckets(/*start=*/ 100.0, /*factor=*/ 1.1, /*count=*/ 100).unwrap(),
+        )
+        .unwrap(),
+    )
 });

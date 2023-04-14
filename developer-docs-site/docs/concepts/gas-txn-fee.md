@@ -84,7 +84,7 @@ In a transaction, for example, transaction A, you are transferring 1000 coins fr
 
 ## Estimating the gas units via simulation
 
-The gas used for a transaction can be estimated by simulating the transaction. When simulating the transaction, the simulation results represent the **exact** amount that is needed at the **exact** state of the blockchain at the time of simulation. These gas units used may change based on the state of the chain.  For this reason, any amount coming out of the simulation is only an estimate, and when setting the max gas amount, it should include an appropriate amount of headroom based upon your comfort-level and historical behaviors. Setting the max gas amount too low will result in the transaction aborting and the account being charged for whatever gas was consumed.
+The gas used for a transaction can be estimated by simulating the transaction on chain as described here or locally via the [gas profiling](../cli-tools/aptos-cli-tool/use-aptos-cli.md#profiling-gas-use) feature of the Aptos CLI. The results of the simulated transaction represent the **exact** amount that is needed at the **exact** state of the blockchain at the time of the simulation. These gas units used may change based on the state of the chain.  For this reason, any amount coming out of the simulation is only an estimate, and when setting the max gas amount, it should include an appropriate amount of headroom based upon your comfort-level and historical behaviors. Setting the max gas amount too low will result in the transaction aborting and the account being charged for whatever gas was consumed.
 
 Transactions can be simulated with the [`SimulateTransaction`](https://fullnode.devnet.aptoslabs.com/v1/spec#/operations/simulate_transaction) API. This API will run the exact transaction that you plan to run.  
 
@@ -110,6 +110,6 @@ The simulation steps for finding the correct amount of gas for a transaction are
     2. `max_gas_amount` as the minimum of the `gas_used` * `a safety factor` or the `max_gas_amount` from the transaction.
 6. If you feel the need to prioritize or deprioritize your transaction, adjust the `gas_unit_price` of the transaction. Increase the value for higher priority, and decrease the value for lower priority.
 
-::: tip
+:::tip
 Prioritization is based upon buckets of `gas_unit_price`. The buckets are defined in [`mempool_config.rs`](https://github.com/aptos-labs/aptos-core/blob/30b385bf38d3dc8c4e8ee0ff045bc5d0d2f67a85/config/src/config/mempool_config.rs#L8). The current buckets are `[0, 150, 300, 500, 1000, 3000, 5000, 10000, 100000, 1000000]`. Therefore, a `gas_unit_price` of 150 and 299 would be priortized nearly the same.
 :::

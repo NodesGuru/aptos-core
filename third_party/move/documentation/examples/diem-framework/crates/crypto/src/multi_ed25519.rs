@@ -142,8 +142,8 @@ impl PrivateKey for MultiEd25519PrivateKey {
 }
 
 impl SigningKey for MultiEd25519PrivateKey {
-    type VerifyingKeyMaterial = MultiEd25519PublicKey;
     type SignatureMaterial = MultiEd25519Signature;
+    type VerifyingKeyMaterial = MultiEd25519PublicKey;
 
     fn sign<T: CryptoHash + Serialize>(&self, message: &T) -> MultiEd25519Signature {
         let mut bitmap = [0u8; BITMAP_NUM_OF_BYTES];
@@ -318,13 +318,13 @@ impl TryFrom<&[u8]> for MultiEd25519PublicKey {
 /// We deduce VerifyingKey from pointing to the signature material
 /// we get the ability to do `pubkey.validate(msg, signature)`
 impl VerifyingKey for MultiEd25519PublicKey {
-    type SigningKeyMaterial = MultiEd25519PrivateKey;
     type SignatureMaterial = MultiEd25519Signature;
+    type SigningKeyMaterial = MultiEd25519PrivateKey;
 }
 
 impl fmt::Display for MultiEd25519PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(&self.to_bytes()))
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 
@@ -486,8 +486,8 @@ impl ValidCryptoMaterial for MultiEd25519Signature {
 }
 
 impl Signature for MultiEd25519Signature {
-    type VerifyingKeyMaterial = MultiEd25519PublicKey;
     type SigningKeyMaterial = MultiEd25519PrivateKey;
+    type VerifyingKeyMaterial = MultiEd25519PublicKey;
 
     fn verify<T: CryptoHash + Serialize>(
         &self,
@@ -519,7 +519,7 @@ impl Signature for MultiEd25519Signature {
                     "{}",
                     CryptoMaterialError::BitVecError("Signature index is out of range".to_string())
                 ))
-            }
+            },
         };
         if bitmap_count_ones(self.bitmap) < public_key.threshold as u32 {
             return Err(anyhow!(
@@ -535,7 +535,7 @@ impl Signature for MultiEd25519Signature {
             while !bitmap_get_bit(self.bitmap, bitmap_index) {
                 bitmap_index += 1;
             }
-            sig.verify_arbitrary_msg(message, &public_key.public_keys[bitmap_index as usize])?;
+            sig.verify_arbitrary_msg(message, &public_key.public_keys[bitmap_index])?;
             bitmap_index += 1;
         }
         Ok(())
